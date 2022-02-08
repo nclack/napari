@@ -3,6 +3,19 @@
 from ._image_slice_data import ImageSliceData
 
 
+def dbg(*args):
+    import inspect
+    from pathlib import Path
+
+    caller = inspect.getframeinfo(inspect.stack()[1][0])
+    print(
+        "{}:{} - {}".format(
+            '/'.join(Path(caller.filename).parts[-2:]), caller.lineno, args
+        )
+    )
+    return args
+
+
 class ImageLoader:
     """The default synchronous ImageLoader."""
 
@@ -19,8 +32,15 @@ class ImageLoader:
         bool
             True if load happened synchronously.
         """
-        data.load_sync()
-        return True
+
+        # HERE
+        if data.is_ready():
+            dbg("here")
+            data.load_sync()
+            return True
+        else:
+            dbg("here")
+            return False
 
     def match(self, data: ImageSliceData) -> bool:
         """Return True if data matches what we are loading.
