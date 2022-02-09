@@ -58,3 +58,41 @@ print('added')
 print('napari run')
 napari.run()
 print('exec exit')
+
+"""
+# NOTES
+
+## Current Approach
+
+We need something that has (a) lazy-evaluation so that we only
+load/compute on the data we end up looking querying and (b) can be materialized
+asynchronously.
+
+The `DataSource` object defined here wraps a dask array (giving us (a)) which
+can be converted to a `concurrent.Futures` object via the `compute()` method.
+
+The idea is that a `DataSource` gets to leverage dask's ability to aggregate
+a compute graph by composing normal array operations up until the last second
+where it needs to be realized as an array.  At that point, it gets converted
+to a Future which can be eagerly but asynchronously evaluated.
+
+## Status
+
+It works for Image layers in a course way.  See Problems.
+
+The `DataSource` above can be manipulated to increase the load time (via
+`sleep`). The presentation of the data in napari is delayed, but otherwise
+remains responsive.
+
+## Problems
+
+This effect of this approach would be made more clear with a suitable control.
+
+At the moment, the future invokes a callback to update napari when data is
+available. It's hard to do things like cancel the futures when they're
+unnecessary.
+
+Currently, this approach has been tested with image layers.  Image layers have
+already been prepared to support this style using the framework Philip Winston
+put in place. It is important to validate the approach on other layers.
+"""

@@ -35,11 +35,11 @@ class ImageLoader:
 
         # HERE
         if data.is_ready():
-            dbg("here")
+            dbg("slice ready")
             data.load_sync()
             return True
         else:
-            dbg("here")
+            dbg("slice not ready")
             return False
 
     def match(self, data: ImageSliceData) -> bool:

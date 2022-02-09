@@ -2,8 +2,8 @@
 """
 from __future__ import annotations
 
-import concurrent.futures
-from typing import TYPE_CHECKING, Any, Optional, Tuple
+from collections import namedtuple
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import numpy as np
 
@@ -24,6 +24,9 @@ def dbg(*args):
         )
     )
     return args
+
+
+WaitingData = namedtuple('WaitingData', ('fut', 'source'))
 
 
 class ImageSliceData:
@@ -51,25 +54,35 @@ class ImageSliceData:
         dbg('new image slice')
         self.layer = layer
         self.indices = indices
-        self.image = image
-        self._fut: Optional[concurrent.futures.Future[Any]] = None
+        self.image = WaitingData(fut=None, source=image)  # (Future,DataSource)
         self.thumbnail_source = thumbnail_source
-        self.sig_load()
 
     def sig_load(self):
-        def cb(_):
-            self.load_sync()
-            self.layer._on_data_loaded(self, sync=False)
+        assert type(self.image) is WaitingData
+        fut = self.image.fut
+        if fut is None:
+            fut = self.image.source.compute()
+            self.image = self.image._replace(fut=fut)
 
-        if self._fut is None:
-            self._fut: concurrent.futures.Future[Any] = self.image.compute()
-            self._fut.add_done_callback(cb)
-            dbg(self._fut)
+            def cb(_):
+                self.load_sync()  # image becomes the ndarray
+                self.layer._on_data_loaded(self, sync=False)
+
+            fut.add_done_callback(cb)
+            dbg(self.image.fut)
+
+    def cancel(self):
+        if (type(self.image) is WaitingData) and self.image.fut:
+            dbg('CANCEL fut', self.image.fut)
+            self.image.fut.cancel()
+
+    def __del__(self):
+        self.cancel()
 
     def is_ready(self) -> bool:
-        if self._fut:
+        if self.image.fut:
             dbg('check fut')
-            return self._fut.done()
+            return self.image.fut.done()
         else:
             dbg('sig load')
             self.sig_load()
@@ -77,8 +90,8 @@ class ImageSliceData:
 
     def load_sync(self) -> None:
         """Call asarray on our images to load them."""
-        assert self._fut is not None
-        self.image = self._fut.result()
+        assert self.image.fut is not None
+        self.image: np.ndarray = self.image.fut.result()
         if self.thumbnail_source is not None:
             self.thumbnail_source = np.asarray(self.thumbnail_source)
 
